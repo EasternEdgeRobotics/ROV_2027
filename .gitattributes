@@ -1,0 +1,18 @@
+# Normalise line endings so a mixed-OS team doesn't get whole-file CRLF diffs.
+* text=auto
+
+# Pixelmator Pro Documents
+*.pxd binary
+
+# Procreate Documents
+*.procreate binary
+
+# Images
+*.png  binary
+*.jpg  binary
+*.ico  binary
+
+# iOS / macOS
+*.ipa  binary
+*.tipa binary
+*.app  binary

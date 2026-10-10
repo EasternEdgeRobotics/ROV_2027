@@ -1,0 +1,2 @@
+# Improvements from 2026
+Improvements made to the software stack over the 2027 year. This is primarily meant for tech doc stuff, and is here so that you hopefully actually remember to update it. THIS SHOULD NOT BE EDITED BY LLMS WITHOUT USER APPROVAL!!!

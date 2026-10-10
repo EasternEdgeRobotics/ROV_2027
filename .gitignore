@@ -1,0 +1,43 @@
+# Build
+/build*/
+/.build/
+/out/
+/install/
+/log/
+/dist/
+
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+
+# Files produced by EER's 2027 Software
+/eer_captures/
+
+# Editor and AI Stuff
+.claude/settings.local.json
+.vscode/
+*.vcxproj.user
+.vs/
+.idea/
+xcuserdata/
+
+# Library and OS files
+imgui.ini
+.DS_Store
+__MACOSX/
+Thumbs.db
+Thumbs.db:encryptable
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Python
+venv/
+.venv/
+__pycache__
+
+# Binaries
+*.ipa
+*.tipa
+*.dSYM/
+*.app
+*.exe
