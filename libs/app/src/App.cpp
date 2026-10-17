@@ -34,6 +34,20 @@ void setWindowIcon(SDL_Window* window, const AppInfo& info) {
     SDL_DestroySurface(surface);
 }
 
+// Eastern Edge blue but adapted because the DS4 has AWFUL colour mixing
+constexpr Uint8 kLightRed = 15; // should be 0 for actual colour
+constexpr Uint8 kLightGreen = 80; // should be 122 for actual colour
+constexpr Uint8 kLightBlue = 217;
+
+// Lights the controller's light bar Eastern Edge blue if the controller has one
+void openGamepad(App& app, SDL_JoystickID id) {
+    app.gamepad = SDL_OpenGamepad(id);
+
+    if (app.gamepad) {
+        SDL_SetGamepadLED(app.gamepad, kLightRed, kLightGreen, kLightBlue);
+    }
+}
+
 void openJoystick(App& app, SDL_JoystickID id) {
     for (SDL_Joystick* joystick : app.joysticks) {
         if (SDL_GetJoystickID(joystick) == id) {
@@ -46,7 +60,7 @@ void openJoystick(App& app, SDL_JoystickID id) {
     }
 
     if (!app.gamepad && SDL_IsGamepad(id)) {
-        app.gamepad = SDL_OpenGamepad(id);
+        openGamepad(app, id);
     }
 }
 
@@ -69,7 +83,7 @@ void closeJoystick(App& app, SDL_JoystickID id) {
         const SDL_JoystickID other = SDL_GetJoystickID(joystick);
 
         if (!app.gamepad && SDL_IsGamepad(other)) {
-            app.gamepad = SDL_OpenGamepad(other);
+            openGamepad(app, other);
         }
     }
 }
