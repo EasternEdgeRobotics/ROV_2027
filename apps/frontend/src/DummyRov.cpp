@@ -102,35 +102,6 @@ void drawPool(const DummyRov& rov, ImVec2 size) {
         ImVec2(barLeft, level), ImVec2(barLeft + depthBarWidth, level), body, 3.0f);
 }
 
-// A bar that fills from the centre, left for negative and right for positive.
-void bipolarBar(float value) {
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const ImVec2 pos = ImGui::GetCursorScreenPos();
-    const ImVec2 size(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight());
-    ImGui::Dummy(size);
-
-    const float mid = pos.x + size.x / 2.0f;
-    const float end = mid + value * size.x / 2.0f;
-    const float bottom = pos.y + size.y;
-
-    draw->AddRectFilled(
-        pos, ImVec2(pos.x + size.x, bottom), ImGui::GetColorU32(ImGuiCol_FrameBg),
-        ImGui::GetStyle().FrameRounding);
-    draw->AddRectFilled(
-        ImVec2(std::min(mid, end), pos.y), ImVec2(std::max(mid, end), bottom),
-        ImGui::GetColorU32(ImGuiCol_PlotHistogram));
-    draw->AddLine(
-        ImVec2(mid, pos.y), ImVec2(mid, bottom), ImGui::GetColorU32(ImGuiCol_Border));
-
-    char text[16];
-    std::snprintf(text, sizeof(text), "%+.2f", value);
-    const ImVec2 textSize = ImGui::CalcTextSize(text);
-
-    draw->AddText(
-        ImVec2(mid - textSize.x / 2.0f, pos.y + (size.y - textSize.y) / 2.0f),
-        ImGui::GetColorU32(ImGuiCol_Text), text);
-}
-
 void byteBar(int value) {
     char text[16];
     std::snprintf(text, sizeof(text), "%d", value);
@@ -183,7 +154,7 @@ void drawDummyRov(DummyRov& rov, const PilotOutput& out, bool* open) {
 
         for (int i = 0; i < 5; ++i) {
             outputRow(axisLabels[i]);
-            bipolarBar(axes[i]);
+            ui::bipolarBar(axes[i]);
         }
 
         for (int i = 0; i < 4; ++i) {
@@ -201,7 +172,7 @@ void drawDummyRov(DummyRov& rov, const PilotOutput& out, bool* open) {
         for (int i = 0; i < 2; ++i) {
             const std::string label = "Motor " + std::to_string(i + 1);
             outputRow(label.c_str());
-            bipolarBar(out.motor[i]);
+            ui::bipolarBar(out.motor[i]);
         }
 
         ImGui::EndTable();

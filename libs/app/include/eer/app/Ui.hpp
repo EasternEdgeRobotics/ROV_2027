@@ -26,4 +26,8 @@ void endInfoTable();
 // label began, so a column of fields lines up.
 void fieldLabel(const char* text, float labelWidth = 110.0f);
 
+// A bar for a -1..1 value that fills from the centre, left for negative and
+// right for positive, with the value written on it. Fills the available width.
+void bipolarBar(float value);
+
 }  // namespace ui

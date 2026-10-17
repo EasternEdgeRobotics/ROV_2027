@@ -18,10 +18,10 @@ enum class Action {
     Servo2,
     Servo3,
     Servo4,
-    Led1,
-    Led2,
     Motor1,
     Motor2,
+    Led1,
+    Led2,
     FastModeHold,
     FastModeToggle,
     InvertControls,
@@ -37,35 +37,41 @@ constexpr size_t kActionCount = static_cast<size_t>(Action::Count);
 struct ActionInfo {
     const char* code;  // what a saved profile stores, so never rename one
     const char* label;
+
+    // Heading in the bindings editor. Rows with the same group stay together.
+    const char* group;
+
+    // Whether the sign matters, so a binding can be reversed.
+    bool directional;
 };
 
 inline constexpr ActionInfo kActions[] = {
-    {"surge", "Surge"},
-    {"sway", "Sway"},
-    {"heave", "Heave"},
-    {"yaw", "Yaw"},
-    {"roll", "Roll"},
-    {"servo_1", "Servo 1"},
-    {"servo_2", "Servo 2"},
-    {"servo_3", "Servo 3"},
-    {"servo_4", "Servo 4"},
-    {"led_1", "LED 1"},
-    {"led_2", "LED 2"},
-    {"motor_1", "Motor 1"},
-    {"motor_2", "Motor 2"},
-    {"fast_mode_hold", "Fast mode (hold)"},
-    {"fast_mode_toggle", "Fast mode (toggle)"},
-    {"invert_controls", "Invert controls"},
-    {"screenshot_1", "Capture camera 1"},
-    {"screenshot_2", "Capture camera 2"},
-    {"screenshot_3", "Capture camera 3"},
-    {"screenshot_4", "Capture camera 4"},
+    {"surge", "Surge", "Movement", true},
+    {"sway", "Sway", "Movement", true},
+    {"heave", "Heave", "Movement", true},
+    {"yaw", "Yaw", "Movement", true},
+    {"roll", "Roll", "Movement", true},
+    {"servo_1", "Servo 1", "Manipulators", true},
+    {"servo_2", "Servo 2", "Manipulators", true},
+    {"servo_3", "Servo 3", "Manipulators", true},
+    {"servo_4", "Servo 4", "Manipulators", true},
+    {"motor_1", "Motor 1", "Manipulators", true},
+    {"motor_2", "Motor 2", "Manipulators", true},
+    {"led_1", "LED 1", "Lighting", true},
+    {"led_2", "LED 2", "Lighting", true},
+    {"fast_mode_hold", "Fast mode (hold)", "Modes", false},
+    {"fast_mode_toggle", "Fast mode (toggle)", "Modes", false},
+    {"invert_controls", "Invert controls", "Modes", false},
+    {"screenshot_1", "Capture camera 1", "Capture", false},
+    {"screenshot_2", "Capture camera 2", "Capture", false},
+    {"screenshot_3", "Capture camera 3", "Capture", false},
+    {"screenshot_4", "Capture camera 4", "Capture", false},
 };
 
 static_assert(std::size(kActions) == kActionCount);
 
 enum class Source {
-    Key,        // SDL_Scancode
+    Key,        // SDL_Scancode, only used by the keyboard mode layout
     Button,     // SDL_GamepadButton
     Axis,       // SDL_GamepadAxis
     JoyButton,  // raw joystick button number
@@ -82,7 +88,8 @@ struct Binding {
     float scale = 1.0f;
 
     // For an axis that stays where it is left, like a throttle. Reads its full
-    // travel as 0..1 instead of -1..1.
+    // travel as 0..1 instead of -1..1, and `scale` picks which end is zero:
+    // the -1 end when positive, the +1 end when negative.
     bool fromMin = false;
 
     // The joystick's GUID, for the Joy sources only. Their numbers mean
@@ -99,11 +106,19 @@ struct Profile {
 // A standard gamepad layout. Used until profiles can be loaded from disk.
 Profile gamepadProfile();
 
+// The fixed keyboard layout, for testing without a controller or flying when
+// one dies. Used on top of the profile while keyboard mode is on.
+const Profile& keyboardProfile();
+
+// Whether keyboard mode drives anything with this key, so the shortcut on the
+// same key can stand aside while it is on.
+bool keyboardModeUses(SDL_Scancode key);
+
 // Every action's state this frame. An action is held while its value is at
 // least half way in either direction, and pressed on the frame it becomes held.
 class Controls {
 public:
-    void update(const App& app, const Profile& profile);
+    void update(const App& app, const Profile& profile, bool keyboardMode);
 
     float value(Action action) const { return value_[index(action)]; }
     bool held(Action action) const { return held_[index(action)]; }
@@ -117,7 +132,13 @@ private:
     bool pressed_[kActionCount] = {};
 };
 
+// SDL reports sticks as -32768..32767 and triggers as 0..32767. Returns -1..1.
+float normaliseAxis(Sint16 raw);
+
 std::string joystickGuid(SDL_Joystick* joystick);
+
+// The same physical input, whatever its direction.
+bool sameInput(const Binding& a, const Binding& b);
 
 // Short text for the Controls tab, for example "-lefty" or "Hat 0 up".
 std::string bindingLabel(const App& app, const Binding& binding);

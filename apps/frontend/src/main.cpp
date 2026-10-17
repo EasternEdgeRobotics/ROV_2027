@@ -1,3 +1,4 @@
+#include "BindingsEditor.hpp"
 #include "Config.hpp"
 #include "Controls.hpp"
 #include "DummyRov.hpp"
@@ -69,9 +70,14 @@ struct State {
     int photos = 0;  // taken in the current section
 
     Profile profile = gamepadProfile();
+    BindingsEditor bindingsEditor;
     Controls controls;
     Pilot pilot;
     DummyRov dummyRov;
+
+    // Keyboard mode SHOULD NEVER SAVE! controller/joysticks are 
+    // the intended way to pilot the ROV!
+    bool keyboardMode = false;
 
     bool showCameras = true;
     bool showSettings = false;
@@ -85,6 +91,12 @@ struct State {
 // about focus here, the key itself comes from SDL.
 bool pressed(const App& app, SDL_Scancode key) {
     return !ImGui::GetIO().WantTextInput && app.keyPressed[key];
+}
+
+// A shortcut on a key keyboard mode flies with stands aside while it is on,
+// otherwise sway left would also capture camera 1.
+bool shortcut(const App& app, const State& state, SDL_Scancode key) {
+    return pressed(app, key) && !(state.keyboardMode && keyboardModeUses(key));
 }
 
 std::string timestampForPath() {
@@ -187,6 +199,8 @@ void drawMenuBar(const App& app, State& state) {
         }
         ImGui::EndMenu();
     }
+
+    ImGui::Checkbox("Keyboard mode", &state.keyboardMode);
 
     if (state.pilot.fastMode) {
         ImGui::TextColored(ui::kWarn, "FAST MODE");
@@ -545,6 +559,28 @@ void drawKeys() {
     ui::endInfoTable();
 }
 
+// Positive key first, so "W / S" reads as forward and back.
+void drawKeyboardModeKeys() {
+    if (!ui::beginInfoTable("keyboard_mode")) {
+        return;
+    }
+
+    for (size_t i = 0; i < kActionCount; ++i) {
+        std::string keys;
+
+        for (const Binding& binding : keyboardProfile().bindings[i]) {
+            keys += (keys.empty() ? "" : " / ") +
+                    std::string(SDL_GetScancodeName(static_cast<SDL_Scancode>(binding.index)));
+        }
+
+        if (!keys.empty()) {
+            ui::infoRow(keys.c_str(), kActions[i].label);
+        }
+    }
+
+    ui::endInfoTable();
+}
+
 // Every connected device with its raw inputs, for finding a flight stick's
 // axis and button numbers.
 void drawDevices(const App& app) {
@@ -566,7 +602,9 @@ void drawDevices(const App& app) {
 
         for (int i = 0; i < SDL_GetNumJoystickAxes(joystick); ++i) {
             char text[16];
-            std::snprintf(text, sizeof(text), "%+.2f ", SDL_GetJoystickAxis(joystick, i) / 32767.0f);
+            std::snprintf(
+                text, sizeof(text), "%+.2f ",
+                normaliseAxis(SDL_GetJoystickAxis(joystick, i)));
             axes += text;
         }
 
@@ -591,56 +629,19 @@ void drawDevices(const App& app) {
     }
 }
 
-void drawBindings(const App& app, const State& state) {
-    const ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
-
-    if (!ImGui::BeginTable("bindings", 3, flags)) {
-        return;
-    }
-
-    ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 160.0f);
-    ImGui::TableSetupColumn("Bound to", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-    ImGui::TableHeadersRow();
-
-    for (size_t i = 0; i < kActionCount; ++i) {
-        const Action action = static_cast<Action>(i);
-        std::string bound;
-
-        for (const Binding& binding : state.profile.bindings[i]) {
-            bound += (bound.empty() ? "" : ", ") + bindingLabel(app, binding);
-        }
-
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-        ImGui::TextUnformatted(kActions[i].label);
-
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled("%s", bound.empty() ? "Not bound" : bound.c_str());
-
-        ImGui::TableNextColumn();
-        const float value = state.controls.value(action);
-
-        if (value != 0.0f) {
-            ImGui::Text("%+.2f", value);
-        }
-    }
-
-    ImGui::EndTable();
-}
-
-void drawControlsTab(const App& app, const State& state) {
+void drawControlsTab(const App& app, State& state) {
     drawKeys();
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Keyboard mode");
+    drawKeyboardModeKeys();
 
     ImGui::Spacing();
     ImGui::SeparatorText("Controllers");
     drawDevices(app);
 
     ImGui::SeparatorText("Bindings");
-    ImGui::TextDisabled(
-        "The built-in %s layout. Profiles you can edit are not in yet.",
-        state.profile.name.c_str());
-    drawBindings(app, state);
+    drawBindingsEditor(state.bindingsEditor, state.profile, app, state.controls);
 }
 
 void drawAboutTab(const State& state, SDL_GPUDevice* gpu) {
@@ -706,23 +707,29 @@ void drawSettings(const App& app, State& state, Cameras& cameras) {
 }
 
 void handleShortcuts(const App& app, State& state, Cameras& cameras) {
+    // The press being captured would fire its shortcut too, and Escape, which
+    // cancels a capture, would cut power.
+    if (state.bindingsEditor.capturing || state.bindingsEditor.releasing) {
+        return;
+    }
+
     for (int i = 0; i < kCameraCount; ++i) {
-        if (pressed(app, kScreenshotKeys[i]) ||
+        if (shortcut(app, state, kScreenshotKeys[i]) ||
             state.controls.pressed(kScreenshotActions[i])) {
             takeScreenshot(state, cameras, i);
         }
 
-        if (pressed(app, kCropKeys[i])) {
+        if (shortcut(app, state, kCropKeys[i])) {
             CropRect& crop = state.config.cameras[i].crop;
             crop.enabled = !crop.enabled;
         }
     }
 
-    if (pressed(app, kNextSectionKey)) {
+    if (shortcut(app, state, kNextSectionKey)) {
         nextSection(state, cameras);
     }
 
-    if (pressed(app, kSettingsKey)) {
+    if (shortcut(app, state, kSettingsKey)) {
         state.showSettings = !state.showSettings;
     }
 
@@ -730,16 +737,16 @@ void handleShortcuts(const App& app, State& state, Cameras& cameras) {
     // when nobody is looking at it.
     if (state.showCoPilot) {
         for (size_t i = 0; i < std::size(kPowerPresets); ++i) {
-            if (pressed(app, kPowerPresetKeys[i])) {
+            if (shortcut(app, state, kPowerPresetKeys[i])) {
                 state.pilot.power = kPowerPresets[i].power;
             }
         }
 
-        if (pressed(app, kPowerOffKey)) {
+        if (shortcut(app, state, kPowerOffKey)) {
             state.pilot.power.power = 0;
         }
 
-        if (pressed(app, kFastModeKey)) {
+        if (shortcut(app, state, kFastModeKey)) {
             state.pilot.fastToggled = !state.pilot.fastToggled;
         }
     }
@@ -817,7 +824,14 @@ int run() {
 
         // Before the shortcuts, which act on controller presses too, and
         // before the pilot, which reads what the shortcuts toggled.
-        state.controls.update(app, state.profile);
+        // Nothing is bound while a binding is being captured, so the ROV holds
+        // still while someone wiggles sticks to find the one they want.
+        static const Profile kNothingBound;
+        const bool capturing = holdsControls(state.bindingsEditor, app);
+
+        state.controls.update(
+            app, capturing ? kNothingBound : state.profile,
+            state.keyboardMode && !capturing);
         handleShortcuts(app, state, cameras);
         updatePilot(state.pilot, state.controls);
 

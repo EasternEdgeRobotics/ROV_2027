@@ -2,6 +2,7 @@
 
 add_executable(eer_frontend
   src/main.cpp
+  src/BindingsEditor.cpp
   src/Config.cpp
   src/Controls.cpp
   src/DummyRov.cpp
