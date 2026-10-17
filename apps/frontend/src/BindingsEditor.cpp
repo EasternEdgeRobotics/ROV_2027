@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace {
@@ -333,7 +334,254 @@ void drawCapturePopup(BindingsEditor& editor, Profile& profile, const App& app) 
     ImGui::EndPopup();
 }
 
+// What a new profile starts with, in the order of the New popup's choices.
+enum NewFrom { kFromGamepad, kFromEmpty, kFromCurrent };
+
+const char* displayName(const Profile& profile) {
+    return profile.name.empty() ? "None" : profile.name.c_str();
+}
+
+void switchTo(BindingsEditor& editor, Profiles& profiles, const std::string& name) {
+    if (name.empty()) {
+        useNoProfile(profiles);
+    } else if (!loadProfile(profiles, name)) {
+        editor.status = "Could not read " + name;
+        return;
+    }
+
+    editor.status = std::string("Loaded ") + displayName(profiles.current);
+    editor.releasing = true;
+}
+
+void openNamePopup(BindingsEditor& editor, const char* popup, const std::string& name) {
+    std::snprintf(editor.name, sizeof(editor.name), "%s", name.c_str());
+    editor.nameProblem.clear();
+    ImGui::OpenPopup(popup);
+}
+
+// The name field shared by New and Rename. Returns true on Enter.
+bool nameField(BindingsEditor& editor) {
+    if (ImGui::IsWindowAppearing()) {
+        ImGui::SetKeyboardFocusHere();
+    }
+
+    ImGui::SetNextItemWidth(260.0f);
+    const bool entered = ImGui::InputText(
+        "##name", editor.name, sizeof(editor.name), ImGuiInputTextFlags_EnterReturnsTrue);
+
+    if (!editor.nameProblem.empty()) {
+        ImGui::TextColored(ui::kBad, "%s", editor.nameProblem.c_str());
+    }
+
+    return entered;
+}
+
+void drawNewPopup(BindingsEditor& editor, Profiles& profiles) {
+    if (!ImGui::BeginPopupModal("New profile", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    bool create = nameField(editor);
+
+    ImGui::RadioButton("Gamepad layout", &editor.newFrom, kFromGamepad);
+    ImGui::RadioButton("No bindings", &editor.newFrom, kFromEmpty);
+    ImGui::RadioButton("These bindings", &editor.newFrom, kFromCurrent);
+    ImGui::Spacing();
+
+    create |= ImGui::Button("Create");
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    if (create) {
+        const std::string name = editor.name;
+        editor.nameProblem = profileNameProblem(profiles, name);
+
+        if (editor.nameProblem.empty()) {
+            Profile profile = editor.newFrom == kFromGamepad ? gamepadProfile()
+                              : editor.newFrom == kFromEmpty ? Profile{}
+                                                             : profiles.current;
+            profile.name = name;
+            profiles.current = profile;
+
+            editor.status = saveProfile(profiles) ? "Created " + name
+                                                  : "Could not write " + name;
+            editor.releasing = true;
+            ImGui::CloseCurrentPopup();
+        }
+    }
+
+    ImGui::EndPopup();
+}
+
+void drawRenamePopup(BindingsEditor& editor, Profiles& profiles) {
+    if (!ImGui::BeginPopupModal("Rename profile", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    bool rename = nameField(editor);
+    ImGui::Spacing();
+
+    rename |= ImGui::Button("Rename");
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    if (rename) {
+        const std::string name = editor.name;
+        editor.nameProblem = profileNameProblem(profiles, name, profiles.current.name);
+
+        if (editor.nameProblem.empty()) {
+            if (name != profiles.current.name) {
+                editor.status = renameProfile(profiles, name) ? "Renamed to " + name
+                                                              : "Could not rename";
+            }
+
+            ImGui::CloseCurrentPopup();
+        }
+    }
+
+    ImGui::EndPopup();
+}
+
+void drawDeletePopup(BindingsEditor& editor, Profiles& profiles) {
+    if (!ImGui::BeginPopupModal("Delete profile", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    ImGui::Text("Delete %s? Its file is removed and cannot be recovered.",
+                profiles.current.name.c_str());
+    ImGui::Spacing();
+
+    if (ImGui::Button("Delete")) {
+        const std::string name = profiles.current.name;
+        editor.status = deleteProfile(profiles) ? "Deleted " + name
+                                                : "Could not delete " + name;
+        editor.releasing = true;
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
+void drawProfileBar(BindingsEditor& editor, Profiles& profiles) {
+    const bool named = !profiles.current.name.empty();
+
+    ui::fieldLabel("Profile", 80.0f);
+    ImGui::SetNextItemWidth(200.0f);
+
+    if (ImGui::BeginCombo("##profile", displayName(profiles.current))) {
+        if (ImGui::Selectable("None", !named)) {
+            requestProfileSwitch(editor, profiles, "");
+        }
+
+        for (const std::string& name : profiles.names) {
+            if (ImGui::Selectable(name.c_str(), name == profiles.current.name)) {
+                requestProfileSwitch(editor, profiles, name);
+            }
+        }
+
+        ImGui::EndCombo();
+    }
+
+    ImGui::SameLine();
+
+    if (named) {
+        ImGui::BeginDisabled(!profiles.unsaved());
+
+        if (ImGui::Button("Save")) {
+            editor.status = saveProfile(profiles) ? "Saved " + profiles.current.name
+                                                  : "Could not write " + profiles.current.name;
+        }
+
+        ImGui::EndDisabled();
+    } else if (ImGui::Button("Save as...")) {
+        editor.newFrom = kFromCurrent;
+        openNamePopup(editor, "New profile", "");
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("New...")) {
+        editor.newFrom = kFromGamepad;
+        openNamePopup(editor, "New profile", "");
+    }
+
+    if (named) {
+        ImGui::SameLine();
+
+        if (ImGui::Button("Rename...")) {
+            openNamePopup(editor, "Rename profile", profiles.current.name);
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Delete...")) {
+            ImGui::OpenPopup("Delete profile");
+        }
+    }
+
+    if (profiles.unsaved()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ui::kWarn, "Unsaved changes");
+    }
+
+    drawNewPopup(editor, profiles);
+    drawRenamePopup(editor, profiles);
+    drawDeletePopup(editor, profiles);
+}
+
 }  // namespace
+
+void requestProfileSwitch(BindingsEditor& editor, Profiles& profiles, const std::string& name) {
+    if (name == profiles.current.name) {
+        return;
+    }
+
+    if (profiles.unsaved()) {
+        editor.pendingSwitch = name;
+    } else {
+        switchTo(editor, profiles, name);
+    }
+}
+
+void drawProfileSwitchPopup(BindingsEditor& editor, Profiles& profiles) {
+    if (editor.pendingSwitch && !ImGui::IsPopupOpen("Unsaved changes")) {
+        ImGui::OpenPopup("Unsaved changes");
+    }
+
+    if (!ImGui::BeginPopupModal("Unsaved changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    ImGui::Text("Discard the unsaved changes to %s?", displayName(profiles.current));
+    ImGui::Spacing();
+
+    if (ImGui::Button("Discard and switch")) {
+        switchTo(editor, profiles, editor.pendingSwitch.value_or(""));
+        editor.pendingSwitch.reset();
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+        editor.pendingSwitch.reset();
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
 
 bool holdsControls(BindingsEditor& editor, const App& app) {
     if (editor.releasing && !scanPressed(app)) {
@@ -344,7 +592,11 @@ bool holdsControls(BindingsEditor& editor, const App& app) {
 }
 
 void drawBindingsEditor(
-    BindingsEditor& editor, Profile& profile, const App& app, const Controls& controls) {
+    BindingsEditor& editor, Profiles& profiles, const App& app, const Controls& controls) {
+    drawProfileBar(editor, profiles);
+
+    Profile& profile = profiles.current;
+
     ui::fieldLabel("Deadzone", 80.0f);
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("##deadzone", &profile.deadzone, 0.0f, 0.9f, "%.2f");
@@ -355,15 +607,20 @@ void drawBindingsEditor(
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Restore defaults")) {
+    if (ImGui::Button("Reset to gamepad layout")) {
+        const std::string name = profile.name;
         profile = gamepadProfile();
-        editor.status = "Restored the built-in gamepad layout";
+        profile.name = name;
+        editor.status = "Reset to the gamepad layout";
     }
 
     ImGui::SameLine();
     ImGui::TextDisabled("%s", editor.status.c_str());
 
-    ImGui::TextDisabled("Changes last until the app closes. Saving profiles is not in yet.");
+    if (profile.name.empty()) {
+        ImGui::TextDisabled("None is never saved. Use Save as to keep these bindings.");
+    }
+
     ImGui::Spacing();
 
     for (size_t i = 0; i < kActionCount; ++i) {

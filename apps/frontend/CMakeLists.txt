@@ -7,6 +7,7 @@ add_executable(eer_frontend
   src/Controls.cpp
   src/DummyRov.cpp
   src/Pilot.cpp
+  src/Profiles.cpp
 )
 
 target_compile_options(eer_frontend PRIVATE ${EER_WARNINGS})

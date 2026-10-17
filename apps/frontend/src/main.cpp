@@ -3,6 +3,7 @@
 #include "Controls.hpp"
 #include "DummyRov.hpp"
 #include "Pilot.hpp"
+#include "Profiles.hpp"
 
 #include <eer/app/App.hpp>
 #include <eer/app/Image.hpp>
@@ -23,6 +24,7 @@
 #include "window_icon.h"
 #endif
 
+#include <cstring>
 #include <ctime>
 #include <iostream>
 #include <memory>
@@ -36,6 +38,7 @@ namespace {
 // Must match the ID in CMakeLists.txt.
 constexpr const char* kAppId = "com.easternedgerobotics.frontend2027";
 constexpr const char* kFileName = "frontend";
+constexpr const char* kTitle = "Eastern Edge Frontend";
 
 // When the proper input library exists, these should be replaced with that!
 constexpr SDL_Scancode kScreenshotKeys[kCameraCount] = {
@@ -69,7 +72,7 @@ struct State {
     int section = 0;
     int photos = 0;  // taken in the current section
 
-    Profile profile = gamepadProfile();
+    Profiles profiles;
     BindingsEditor bindingsEditor;
     Controls controls;
     Pilot pilot;
@@ -197,6 +200,31 @@ void drawMenuBar(const App& app, State& state) {
         if (ImGui::MenuItem("Settings", SDL_GetScancodeName(kSettingsKey))) {
             state.showSettings = !state.showSettings;
         }
+        ImGui::EndMenu();
+    }
+
+    // Titled with the current profile, so the menu doubles as the indicator.
+    Profiles& profiles = state.profiles;
+    const std::string current =
+        profiles.current.name.empty() ? "No profile" : profiles.current.name;
+
+    if (ImGui::BeginMenu((current + "###profile").c_str())) {
+        // A profile copied in from another laptop shows up without a restart.
+        if (ImGui::IsWindowAppearing()) {
+            refreshProfiles(profiles);
+        }
+
+        // The current one is greyed out instead of ticked.
+        if (ImGui::MenuItem("None", nullptr, false, !profiles.current.name.empty())) {
+            requestProfileSwitch(state.bindingsEditor, profiles, "");
+        }
+
+        for (const std::string& name : profiles.names) {
+            if (ImGui::MenuItem(name.c_str(), nullptr, false, name != profiles.current.name)) {
+                requestProfileSwitch(state.bindingsEditor, profiles, name);
+            }
+        }
+
         ImGui::EndMenu();
     }
 
@@ -581,8 +609,7 @@ void drawKeyboardModeKeys() {
     ui::endInfoTable();
 }
 
-// Every connected device with its raw inputs, for finding a flight stick's
-// axis and button numbers.
+// Every connected joystick/controller
 void drawDevices(const App& app) {
     if (app.joysticks.empty()) {
         ImGui::TextDisabled("No controller connected.");
@@ -597,51 +624,91 @@ void drawDevices(const App& app) {
         ImGui::SameLine();
         ImGui::TextDisabled(
             "%s  %s", isGamepad ? "gamepad" : "joystick", joystickGuid(joystick).c_str());
-
-        std::string axes;
-
-        for (int i = 0; i < SDL_GetNumJoystickAxes(joystick); ++i) {
-            char text[16];
-            std::snprintf(
-                text, sizeof(text), "%+.2f ",
-                normaliseAxis(SDL_GetJoystickAxis(joystick, i)));
-            axes += text;
-        }
-
-        std::string buttons;
-
-        for (int i = 0; i < SDL_GetNumJoystickButtons(joystick); ++i) {
-            if (SDL_GetJoystickButton(joystick, i)) {
-                buttons += std::to_string(i) + " ";
-            }
-        }
-
-        std::string hats;
-
-        for (int i = 0; i < SDL_GetNumJoystickHats(joystick); ++i) {
-            hats += std::to_string(SDL_GetJoystickHat(joystick, i)) + " ";
-        }
-
-        ImGui::TextDisabled("Axes     %s", axes.c_str());
-        ImGui::TextDisabled("Buttons  %s", buttons.c_str());
-        ImGui::TextDisabled("Hats     %s", hats.c_str());
-        ImGui::Spacing();
     }
 }
 
 void drawControlsTab(const App& app, State& state) {
+    if (state.keyboardMode) {
+        ImGui::SeparatorText("Keyboard mode");
+        drawKeyboardModeKeys();
+        ImGui::TextDisabled(
+            "Controllers and bindings are hidden while keyboard mode is on.");
+    } else {        
+        ImGui::SeparatorText("Bindings");
+        drawDevices(app);
+        ImGui::Spacing();
+        drawBindingsEditor(state.bindingsEditor, state.profiles, app, state.controls);
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Keys");
     drawKeys();
+}
 
-    ImGui::Spacing();
-    ImGui::SeparatorText("Keyboard mode");
-    drawKeyboardModeKeys();
+// For example "Eastern Edge Frontend (Peyton, unsaved)".
+std::string windowTitle(const Profiles& profiles) {
+    const std::string name =
+        profiles.current.name.empty() ? "No profile" : profiles.current.name;
 
-    ImGui::Spacing();
-    ImGui::SeparatorText("Controllers");
-    drawDevices(app);
+    return std::string(kTitle) + " (" + name + (profiles.unsaved() ? ", unsaved" : "") + ")";
+}
 
-    ImGui::SeparatorText("Bindings");
-    drawBindingsEditor(state.bindingsEditor, state.profile, app, state.controls);
+// Returns true when it is fine to close. Closing is where unsaved bindings
+// would be lost, and losing a layout someone just built mid-run costs them.
+bool confirmQuit(const App& app, State& state) {
+    Profiles& profiles = state.profiles;
+
+    if (!profiles.unsaved()) {
+        return true;
+    }
+
+    enum { kCancel, kDiscard, kSave };
+
+    const bool named = !profiles.current.name.empty();
+    const std::string message =
+        named ? "Save the changes to " + profiles.current.name + "?"
+              : "These bindings are not in a profile and will be lost. To keep them, "
+                "cancel and use Save as in Settings > Controls.";
+
+    const SDL_MessageBoxButtonData saveButtons[] = {
+        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, kSave, "Save"},
+        {0, kDiscard, "Discard"},
+        {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, kCancel, "Cancel"},
+    };
+    const SDL_MessageBoxButtonData discardButtons[] = {
+        {0, kDiscard, "Discard"},
+        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT,
+         kCancel, "Cancel"},
+    };
+
+    SDL_MessageBoxData box = {};
+    box.flags = SDL_MESSAGEBOX_WARNING;
+    box.window = app.window;
+    box.title = "Unsaved bindings";
+    box.message = message.c_str();
+    box.buttons = named ? saveButtons : discardButtons;
+    box.numbuttons = named ? 3 : 2;
+
+    int choice = kCancel;
+
+    // If the dialog cannot be shown, closing anyway beats an app that cannot
+    // be closed.
+    if (!SDL_ShowMessageBox(&box, &choice)) {
+        return true;
+    }
+
+    if (choice == kSave && !saveProfile(profiles)) {
+        SDL_ShowSimpleMessageBox(
+            SDL_MESSAGEBOX_ERROR, "Could not save",
+            ("Could not write " + profiles.current.name + ".").c_str(), app.window);
+        return false;
+    }
+
+    if (choice == kCancel && !named) {
+        state.showSettings = true;
+    }
+
+    return choice != kCancel;
 }
 
 void drawAboutTab(const State& state, SDL_GPUDevice* gpu) {
@@ -758,9 +825,66 @@ void handleShortcuts(const App& app, State& state, Cameras& cameras) {
     }
 }
 
-int run() {
+// One frame, between appBeginFrame and appEndFrame. `title` is the window
+// title last set.
+void runFrame(App& app, State& state, Cameras& cameras, std::string& title) {
+    // Only when it changes. Some window managers redraw the title bar on
+    // every set, even to the same text.
+    if (const std::string next = windowTitle(state.profiles); next != title) {
+        title = next;
+        SDL_SetWindowTitle(app.window, title.c_str());
+    }
+
+    applyCameraSettings(state, cameras);
+
+    // Uploads and converts the newest frame of each stream.
+    for (auto& camera : cameras) {
+        camera->prepare(app.cmd);
+    }
+
+    // Before the shortcuts, which act on controller presses too, and
+    // before the pilot, which reads what the shortcuts toggled.
+    // Nothing is bound while a binding is being captured, so the ROV holds
+    // still while someone wiggles sticks to find the one they want.
+    static const Profile kNothingBound;
+    const bool capturing = holdsControls(state.bindingsEditor, app);
+
+    state.controls.update(
+        app, capturing ? kNothingBound : state.profiles.current,
+        state.keyboardMode && !capturing);
+    handleShortcuts(app, state, cameras);
+    updatePilot(state.pilot, state.controls);
+
+    drawMenuBar(app, state);
+
+    const float bottomBarHeight = drawBottomBar(state, cameras);
+
+    if (state.showCameras) {
+        drawCameraGrid(cameras, bottomBarHeight);
+    }
+
+    if (state.showCoPilot) {
+        drawCoPilotWindow(state.pilot, &state.showCoPilot);
+    }
+
+    if (state.showDummyRov) {
+        drawDummyRov(state.dummyRov, state.pilot.out, &state.showDummyRov);
+    }
+
+    if (state.showSettings) {
+        drawSettings(app, state, cameras);
+    }
+
+    if (state.showThemeEditor) {
+        drawThemeEditor(&state.showThemeEditor);
+    }
+
+    drawProfileSwitchPopup(state.bindingsEditor, state.profiles);
+}
+
+int run(const std::string& profileName) {
     AppInfo info;
-    info.title = "Eastern Edge Frontend";
+    info.title = kTitle;
     info.id = kAppId;
     info.version = EER_VERSION;
     info.fileName = kFileName;
@@ -791,7 +915,24 @@ int run() {
                              : "Using defaults";
     state.sessionDir = paths::picturesDir() / "eer_captures" / timestampForPath();
 
+    // Every launch starts on None, so nobody flies on someone else's bindings
+    // by accident. --profile is how a per-person launcher picks theirs.
+    state.profiles.dir = paths::configDir() / "profiles";
+    refreshProfiles(state.profiles);
+
+    if (!profileName.empty() && !loadProfile(state.profiles, profileName)) {
+        const std::string message =
+            "There is no profile named " + profileName + " in " +
+            state.profiles.dir.string() + ". Starting with no profile.";
+
+        SDL_ShowSimpleMessageBox(
+            SDL_MESSAGEBOX_WARNING, "Profile not found", message.c_str(), app.window);
+    }
+
+    std::string title;
+
     std::cout << "Config: " << state.configPath << "\n"
+              << "Profiles: " << state.profiles.dir << "\n"
               << "Captures: " << state.sessionDir << std::endl;
 
     image::Texture noSignal;
@@ -810,56 +951,21 @@ int run() {
 
     applySection(state, cameras);
 
-    while (app.running) {
-        if (!appBeginFrame(app)) {
-            continue;
+    for (;;) {
+        while (app.running) {
+            if (appBeginFrame(app)) {
+                runFrame(app, state, cameras, title);
+                appEndFrame(app);
+            }
         }
 
-        applyCameraSettings(state, cameras);
-
-        // Uploads and converts the newest frame of each stream.
-        for (auto& camera : cameras) {
-            camera->prepare(app.cmd);
+        // Closing is where unsaved bindings would be lost, so Cancel goes
+        // back to the loop.
+        if (confirmQuit(app, state)) {
+            break;
         }
 
-        // Before the shortcuts, which act on controller presses too, and
-        // before the pilot, which reads what the shortcuts toggled.
-        // Nothing is bound while a binding is being captured, so the ROV holds
-        // still while someone wiggles sticks to find the one they want.
-        static const Profile kNothingBound;
-        const bool capturing = holdsControls(state.bindingsEditor, app);
-
-        state.controls.update(
-            app, capturing ? kNothingBound : state.profile,
-            state.keyboardMode && !capturing);
-        handleShortcuts(app, state, cameras);
-        updatePilot(state.pilot, state.controls);
-
-        drawMenuBar(app, state);
-
-        const float bottomBarHeight = drawBottomBar(state, cameras);
-
-        if (state.showCameras) {
-            drawCameraGrid(cameras, bottomBarHeight);
-        }
-
-        if (state.showCoPilot) {
-            drawCoPilotWindow(state.pilot, &state.showCoPilot);
-        }
-
-        if (state.showDummyRov) {
-            drawDummyRov(state.dummyRov, state.pilot.out, &state.showDummyRov);
-        }
-
-        if (state.showSettings) {
-            drawSettings(app, state, cameras);
-        }
-
-        if (state.showThemeEditor) {
-            drawThemeEditor(&state.showThemeEditor);
-        }
-
-        appEndFrame(app);
+        app.running = true;
     }
 
     // Everything that holds a GPU resource has to go before the device does.
@@ -877,8 +983,19 @@ int run() {
 // SDL_main.h renames this on Windows and supplies the real WinMain, so the
 // signature has to be exactly this.
 int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
+    std::string profile;
 
-    return run();
+    // Anything else is ignored, macOS adds its own arguments to a bundle
+    // launched from Finder.
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+
+        if (arg == "--profile" && i + 1 < argc) {
+            profile = argv[++i];
+        } else if (arg.rfind("--profile=", 0) == 0) {
+            profile = arg.substr(std::strlen("--profile="));
+        }
+    }
+
+    return run(profile);
 }

@@ -95,12 +95,16 @@ struct Binding {
     // The joystick's GUID, for the Joy sources only. Their numbers mean
     // something different on every model.
     std::string device;
+
+    friend bool operator==(const Binding&, const Binding&) = default;
 };
 
 struct Profile {
-    std::string name;
+    std::string name;  // empty for the built-in None profile
     float deadzone = 0.15f;
     std::vector<Binding> bindings[kActionCount];
+
+    friend bool operator==(const Profile&, const Profile&) = default;
 };
 
 // A standard gamepad layout. Used until profiles can be loaded from disk.
