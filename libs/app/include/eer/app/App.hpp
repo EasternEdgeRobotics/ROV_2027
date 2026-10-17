@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <string>
+#include <vector>
 
 // The window, the GPU device and the ImGui frame, shared by every app.
 //
@@ -58,6 +59,17 @@ struct App {
     // left out, so holding a key counts once. All keyboard input is read from
     // SDL like this and never through ImGui, so there is one input path.
     bool keyPressed[SDL_SCANCODE_COUNT] = {};
+
+    // Keys held right now, indexed the same way. SDL's own array, valid until
+    // appShutdown.
+    const bool* keyDown = nullptr;
+
+    // Every connected joystick, gamepads included, opened as it is plugged in.
+    // A flight stick has no gamepad mapping, so it is only ever in this list.
+    std::vector<SDL_Joystick*> joysticks;
+
+    // The first connected device SDL has a gamepad mapping for, or null.
+    SDL_Gamepad* gamepad = nullptr;
 };
 
 // Shows the message in a native dialog as well as on stderr, so a failure is

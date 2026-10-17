@@ -34,6 +34,46 @@ void setWindowIcon(SDL_Window* window, const AppInfo& info) {
     SDL_DestroySurface(surface);
 }
 
+void openJoystick(App& app, SDL_JoystickID id) {
+    for (SDL_Joystick* joystick : app.joysticks) {
+        if (SDL_GetJoystickID(joystick) == id) {
+            return;
+        }
+    }
+
+    if (SDL_Joystick* joystick = SDL_OpenJoystick(id)) {
+        app.joysticks.push_back(joystick);
+    }
+
+    if (!app.gamepad && SDL_IsGamepad(id)) {
+        app.gamepad = SDL_OpenGamepad(id);
+    }
+}
+
+void closeJoystick(App& app, SDL_JoystickID id) {
+    if (app.gamepad && SDL_GetGamepadID(app.gamepad) == id) {
+        SDL_CloseGamepad(app.gamepad);
+        app.gamepad = nullptr;
+    }
+
+    for (auto it = app.joysticks.begin(); it != app.joysticks.end(); ++it) {
+        if (SDL_GetJoystickID(*it) == id) {
+            SDL_CloseJoystick(*it);
+            app.joysticks.erase(it);
+            break;
+        }
+    }
+
+    // A second gamepad takes over when the first is unplugged.
+    for (SDL_Joystick* joystick : app.joysticks) {
+        const SDL_JoystickID other = SDL_GetJoystickID(joystick);
+
+        if (!app.gamepad && SDL_IsGamepad(other)) {
+            app.gamepad = SDL_OpenGamepad(other);
+        }
+    }
+}
+
 }  // namespace
 
 void reportFatal(const char* stage, const char* detail) {
@@ -45,9 +85,31 @@ bool appInit(App& app, const AppInfo& info) {
     SDL_SetAppMetadata(info.title, info.version, info.id);
     SDL_SetHint(SDL_HINT_APP_ID, info.id);
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+    // macOS's GameController framework seems to claim flight sticks
+    // (Logitech Extreme 3D), but something along the chain is broken so with SDL's
+    // GameController backend enabled it doesn't work anymore.
+    //
+    // Remove this when https://github.com/libsdl-org/SDL/issues/16519 is fixed.
+    SDL_SetHint(SDL_HINT_JOYSTICK_MFI, "0");
+
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) {
         reportFatal("SDL_Init failed", SDL_GetError());
         return false;
+    }
+
+    app.keyDown = SDL_GetKeyboardState(nullptr);
+
+    // Open what is already plugged in, so it works without waiting for an
+    // added event. openJoystick skips a device that is open already, in case
+    // one arrives anyway.
+    int count = 0;
+
+    if (SDL_JoystickID* ids = SDL_GetJoysticks(&count)) {
+        for (int i = 0; i < count; ++i) {
+            openJoystick(app, ids[i]);
+        }
+
+        SDL_free(ids);
     }
 
     SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
@@ -126,6 +188,15 @@ bool appBeginFrame(App& app) {
             app.keyPressed[event.key.scancode] = true;
         }
 
+        // Fires for gamepads too, every gamepad is also a joystick.
+        if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
+            openJoystick(app, event.jdevice.which);
+        }
+
+        if (event.type == SDL_EVENT_JOYSTICK_REMOVED) {
+            closeJoystick(app, event.jdevice.which);
+        }
+
         if (event.type == SDL_EVENT_QUIT) {
             app.running = false;
         }
@@ -195,6 +266,14 @@ void appShutdown(App& app) {
     ImGui_ImplSDLGPU3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
+
+    if (app.gamepad) {
+        SDL_CloseGamepad(app.gamepad);
+    }
+
+    for (SDL_Joystick* joystick : app.joysticks) {
+        SDL_CloseJoystick(joystick);
+    }
 
     SDL_ReleaseWindowFromGPUDevice(app.gpu, app.window);
     SDL_DestroyGPUDevice(app.gpu);

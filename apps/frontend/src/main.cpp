@@ -1,4 +1,7 @@
 #include "Config.hpp"
+#include "Controls.hpp"
+#include "DummyRov.hpp"
+#include "Pilot.hpp"
 
 #include <eer/app/App.hpp>
 #include <eer/app/Image.hpp>
@@ -42,6 +45,17 @@ constexpr SDL_Scancode kNextSectionKey = SDL_SCANCODE_T;
 constexpr SDL_Scancode kSettingsKey = SDL_SCANCODE_F1;
 constexpr SDL_Scancode kThemeEditorKey = SDL_SCANCODE_F10;
 
+// Co-pilot keys. The keypad, because 1 to 4 already toggle the crops.
+constexpr SDL_Scancode kPowerPresetKeys[] = {
+    SDL_SCANCODE_KP_1, SDL_SCANCODE_KP_2, SDL_SCANCODE_KP_3, SDL_SCANCODE_KP_4};
+constexpr SDL_Scancode kPowerOffKey = SDL_SCANCODE_ESCAPE;
+constexpr SDL_Scancode kFastModeKey = SDL_SCANCODE_V;
+
+static_assert(std::size(kPowerPresetKeys) == std::size(kPowerPresets));
+
+constexpr Action kScreenshotActions[kCameraCount] = {
+    Action::Screenshot1, Action::Screenshot2, Action::Screenshot3, Action::Screenshot4};
+
 using Cameras = std::vector<std::unique_ptr<Camera>>;
 
 struct State {
@@ -54,9 +68,16 @@ struct State {
     int section = 0;
     int photos = 0;  // taken in the current section
 
+    Profile profile = gamepadProfile();
+    Controls controls;
+    Pilot pilot;
+    DummyRov dummyRov;
+
     bool showCameras = true;
     bool showSettings = false;
     bool showThemeEditor = false;
+    bool showCoPilot = false;
+    bool showDummyRov = false;
 };
 
 // True on the frame the key goes down. Ignored while a text field has focus,
@@ -129,7 +150,19 @@ void applyCameraSettings(const State& state, Cameras& cameras) {
     }
 }
 
-void drawMenuBar(State& state) {
+const char* controllerName(const App& app) {
+    const char* name = nullptr;
+
+    if (app.gamepad) {
+        name = SDL_GetGamepadName(app.gamepad);
+    } else if (!app.joysticks.empty()) {
+        name = SDL_GetJoystickName(app.joysticks.front());
+    }
+
+    return name ? name : "No controller";
+}
+
+void drawMenuBar(const App& app, State& state) {
     if (!ImGui::BeginMainMenuBar()) {
         return;
     }
@@ -140,16 +173,28 @@ void drawMenuBar(State& state) {
             state.showCameras = !state.showCameras;
         }
 
+        ImGui::MenuItem("Co-Pilot", nullptr, &state.showCoPilot);
+        ImGui::MenuItem("Dummy ROV", nullptr, &state.showDummyRov);
+
         if (ImGui::MenuItem("Settings", SDL_GetScancodeName(kSettingsKey))) {
             state.showSettings = !state.showSettings;
         }
         ImGui::EndMenu();
     }
 
-    char info[96];
+    if (state.pilot.fastMode) {
+        ImGui::TextColored(ui::kWarn, "FAST MODE");
+    }
+
+    if (state.pilot.invert) {
+        ImGui::TextColored(ui::kWarn, "INVERTED");
+    }
+
+    char info[192];
     std::snprintf(
-        info, sizeof(info), "Section %d    Photos %d    %.0f FPS",
-        state.section, state.photos, ImGui::GetIO().Framerate);
+        info, sizeof(info), "%s    Section %d    Photos %d    %.0f FPS",
+        controllerName(app), state.section, state.photos,
+        ImGui::GetIO().Framerate);
 
     ImGui::SameLine();
     ui::alignRight(ImGui::CalcTextSize(info).x);
@@ -463,8 +508,8 @@ void drawCaptureTab(State& state) {
     drawSaveRow(state);
 }
 
-void drawControlsTab() {
-    if (!ui::beginInfoTable("controls")) {
+void drawKeys() {
+    if (!ui::beginInfoTable("keys")) {
         return;
     }
 
@@ -482,7 +527,114 @@ void drawControlsTab() {
     ui::infoRow(SDL_GetScancodeName(kSettingsKey), "Settings");
     ui::infoRow(SDL_GetScancodeName(kThemeEditorKey), "Theme editor");
 
+    for (size_t i = 0; i < std::size(kPowerPresets); ++i) {
+        const std::string text =
+            std::string("Power preset: ") + kPowerPresets[i].label + ", co-pilot window open";
+        ui::infoRow(SDL_GetScancodeName(kPowerPresetKeys[i]), text.c_str());
+    }
+
+    ui::infoRow(SDL_GetScancodeName(kPowerOffKey), "Power to 0%, co-pilot window open");
+    ui::infoRow(SDL_GetScancodeName(kFastModeKey), "Toggle fast mode, co-pilot window open");
+
     ui::endInfoTable();
+}
+
+// Every connected device with its raw inputs, for finding a flight stick's
+// axis and button numbers.
+void drawDevices(const App& app) {
+    if (app.joysticks.empty()) {
+        ImGui::TextDisabled("No controller connected.");
+        return;
+    }
+
+    for (SDL_Joystick* joystick : app.joysticks) {
+        const char* name = SDL_GetJoystickName(joystick);
+        const bool isGamepad = app.gamepad && SDL_GetGamepadJoystick(app.gamepad) == joystick;
+
+        ImGui::Text("%s", name ? name : "Unnamed joystick");
+        ImGui::SameLine();
+        ImGui::TextDisabled(
+            "%s  %s", isGamepad ? "gamepad" : "joystick", joystickGuid(joystick).c_str());
+
+        std::string axes;
+
+        for (int i = 0; i < SDL_GetNumJoystickAxes(joystick); ++i) {
+            char text[16];
+            std::snprintf(text, sizeof(text), "%+.2f ", SDL_GetJoystickAxis(joystick, i) / 32767.0f);
+            axes += text;
+        }
+
+        std::string buttons;
+
+        for (int i = 0; i < SDL_GetNumJoystickButtons(joystick); ++i) {
+            if (SDL_GetJoystickButton(joystick, i)) {
+                buttons += std::to_string(i) + " ";
+            }
+        }
+
+        std::string hats;
+
+        for (int i = 0; i < SDL_GetNumJoystickHats(joystick); ++i) {
+            hats += std::to_string(SDL_GetJoystickHat(joystick, i)) + " ";
+        }
+
+        ImGui::TextDisabled("Axes     %s", axes.c_str());
+        ImGui::TextDisabled("Buttons  %s", buttons.c_str());
+        ImGui::TextDisabled("Hats     %s", hats.c_str());
+        ImGui::Spacing();
+    }
+}
+
+void drawBindings(const App& app, const State& state) {
+    const ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+
+    if (!ImGui::BeginTable("bindings", 3, flags)) {
+        return;
+    }
+
+    ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+    ImGui::TableSetupColumn("Bound to", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableHeadersRow();
+
+    for (size_t i = 0; i < kActionCount; ++i) {
+        const Action action = static_cast<Action>(i);
+        std::string bound;
+
+        for (const Binding& binding : state.profile.bindings[i]) {
+            bound += (bound.empty() ? "" : ", ") + bindingLabel(app, binding);
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(kActions[i].label);
+
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("%s", bound.empty() ? "Not bound" : bound.c_str());
+
+        ImGui::TableNextColumn();
+        const float value = state.controls.value(action);
+
+        if (value != 0.0f) {
+            ImGui::Text("%+.2f", value);
+        }
+    }
+
+    ImGui::EndTable();
+}
+
+void drawControlsTab(const App& app, const State& state) {
+    drawKeys();
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Controllers");
+    drawDevices(app);
+
+    ImGui::SeparatorText("Bindings");
+    ImGui::TextDisabled(
+        "The built-in %s layout. Profiles you can edit are not in yet.",
+        state.profile.name.c_str());
+    drawBindings(app, state);
 }
 
 void drawAboutTab(const State& state, SDL_GPUDevice* gpu) {
@@ -516,7 +668,7 @@ void drawAboutTab(const State& state, SDL_GPUDevice* gpu) {
     ImGui::TextDisabled("Config: %s", state.configPath.string().c_str());
 }
 
-void drawSettings(State& state, Cameras& cameras, SDL_GPUDevice* gpu) {
+void drawSettings(const App& app, State& state, Cameras& cameras) {
     ImGui::SetNextWindowSize(ImVec2(900, 520), ImGuiCond_FirstUseEver);
 
     if (ImGui::Begin("Settings", &state.showSettings) &&
@@ -532,12 +684,12 @@ void drawSettings(State& state, Cameras& cameras, SDL_GPUDevice* gpu) {
         }
 
         if (ImGui::BeginTabItem("Controls")) {
-            drawControlsTab();
+            drawControlsTab(app, state);
             ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem("About")) {
-            drawAboutTab(state, gpu);
+            drawAboutTab(state, app.gpu);
             ImGui::EndTabItem();
         }
 
@@ -549,7 +701,8 @@ void drawSettings(State& state, Cameras& cameras, SDL_GPUDevice* gpu) {
 
 void handleShortcuts(const App& app, State& state, Cameras& cameras) {
     for (int i = 0; i < kCameraCount; ++i) {
-        if (pressed(app, kScreenshotKeys[i])) {
+        if (pressed(app, kScreenshotKeys[i]) ||
+            state.controls.pressed(kScreenshotActions[i])) {
             takeScreenshot(state, cameras, i);
         }
 
@@ -565,6 +718,24 @@ void handleShortcuts(const App& app, State& state, Cameras& cameras) {
 
     if (pressed(app, kSettingsKey)) {
         state.showSettings = !state.showSettings;
+    }
+
+    // Only while the window is open, so power never changes from a stray key
+    // when nobody is looking at it.
+    if (state.showCoPilot) {
+        for (size_t i = 0; i < std::size(kPowerPresets); ++i) {
+            if (pressed(app, kPowerPresetKeys[i])) {
+                state.pilot.power = kPowerPresets[i].power;
+            }
+        }
+
+        if (pressed(app, kPowerOffKey)) {
+            state.pilot.power.power = 0;
+        }
+
+        if (pressed(app, kFastModeKey)) {
+            state.pilot.fastToggled = !state.pilot.fastToggled;
+        }
     }
 
     // Not through pressed(), so the editor can be closed while one of its own
@@ -638,8 +809,13 @@ int run() {
             camera->prepare(app.cmd);
         }
 
+        // Before the shortcuts, which act on controller presses too, and
+        // before the pilot, which reads what the shortcuts toggled.
+        state.controls.update(app, state.profile);
         handleShortcuts(app, state, cameras);
-        drawMenuBar(state);
+        updatePilot(state.pilot, state.controls);
+
+        drawMenuBar(app, state);
 
         const float bottomBarHeight = drawBottomBar(state, cameras);
 
@@ -647,8 +823,16 @@ int run() {
             drawCameraGrid(cameras, bottomBarHeight);
         }
 
+        if (state.showCoPilot) {
+            drawCoPilotWindow(state.pilot, &state.showCoPilot);
+        }
+
+        if (state.showDummyRov) {
+            drawDummyRov(state.dummyRov, state.pilot.out, &state.showDummyRov);
+        }
+
         if (state.showSettings) {
-            drawSettings(state, cameras, app.gpu);
+            drawSettings(app, state, cameras);
         }
 
         if (state.showThemeEditor) {
