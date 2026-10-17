@@ -169,12 +169,18 @@ void drawMenuBar(const App& app, State& state) {
 
     if (ImGui::BeginMenu("Windows")) {
         // The camera view has no title bar to close it from, so this toggles.
+        // windows shouldnt have checkmarks when theyre open, it looks bad.
         if (ImGui::MenuItem("Cameras")) {
             state.showCameras = !state.showCameras;
         }
 
-        ImGui::MenuItem("Co-Pilot", nullptr, &state.showCoPilot);
-        ImGui::MenuItem("Dummy ROV", nullptr, &state.showDummyRov);
+        if (ImGui::MenuItem("Co-Pilot")) {
+            state.showCoPilot = !state.showCoPilot;
+        }
+
+        if (ImGui::MenuItem("Dummy ROV")) {
+            state.showDummyRov = !state.showDummyRov;
+        }
 
         if (ImGui::MenuItem("Settings", SDL_GetScancodeName(kSettingsKey))) {
             state.showSettings = !state.showSettings;
