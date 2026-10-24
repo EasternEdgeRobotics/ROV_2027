@@ -62,7 +62,7 @@ void updatePilot(Pilot& pilot, const Controls& controls) {
 
     pilot.fastMode = pilot.fastToggled || controls.held(Action::FastModeHold);
 
-    const Power& power = pilot.fastMode ? pilot.fastPower : pilot.power;
+    const Power& power = activePower(pilot);
     PilotOutput& out = pilot.out;
 
     // Same as 2026, which flipped surge and yaw only.
@@ -84,6 +84,10 @@ void updatePilot(Pilot& pilot, const Controls& controls) {
 
     out.motor[0] = controls.value(Action::Motor1);
     out.motor[1] = controls.value(Action::Motor2);
+}
+
+const Power& activePower(const Pilot& pilot) {
+    return pilot.fastMode ? pilot.fastPower : pilot.power;
 }
 
 void drawCoPilotWindow(Pilot& pilot, bool* open) {

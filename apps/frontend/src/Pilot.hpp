@@ -53,4 +53,7 @@ struct Pilot {
 
 void updatePilot(Pilot& pilot, const Controls& controls);
 
+// The fast mode power while fast mode is on, otherwise the normal power.
+const Power& activePower(const Pilot& pilot);
+
 void drawCoPilotWindow(Pilot& pilot, bool* open);

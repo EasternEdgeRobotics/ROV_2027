@@ -44,6 +44,10 @@ struct AppInfo {
     size_t iconPngSize = 0;
 };
 
+// Eastern Edge blue for a pad's light bar, adjusted because the DS4 mixes
+// colours badly. The real colour is (0, 122, 217).
+constexpr SDL_Color kGamepadBlue = {15, 80, 217, 255};
+
 struct App {
     SDL_Window* window = nullptr;
     SDL_GPUDevice* gpu = nullptr;
@@ -70,6 +74,10 @@ struct App {
 
     // The first connected device SDL has a gamepad mapping for, or null.
     SDL_Gamepad* gamepad = nullptr;
+
+    // What the gamepad's light bar shows, on pads that have one. Set it with
+    // setGamepadLight, and a pad that connects later gets it too.
+    SDL_Color gamepadLight = kGamepadBlue;
 };
 
 // Shows the message in a native dialog as well as on stderr, so a failure is
@@ -77,6 +85,10 @@ struct App {
 void reportFatal(const char* stage, const char* detail);
 
 bool appInit(App& app, const AppInfo& info);
+
+// Only sends to the pad when the colour changes, so it can be called every
+// frame. Each send is a report over USB or Bluetooth.
+void setGamepadLight(App& app, SDL_Color colour);
 
 // Returns false when there is nothing to draw this frame (minimized, or
 // quitting). Do not call appEndFrame in that case.

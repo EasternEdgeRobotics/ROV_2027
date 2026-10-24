@@ -57,6 +57,8 @@ constexpr SDL_Scancode kFastModeKey = SDL_SCANCODE_V;
 
 static_assert(std::size(kPowerPresetKeys) == std::size(kPowerPresets));
 
+constexpr SDL_Color kPowerOffLight = {255, 0, 0, 255};
+
 constexpr Action kScreenshotActions[kCameraCount] = {
     Action::Screenshot1, Action::Screenshot2, Action::Screenshot3, Action::Screenshot4};
 
@@ -854,6 +856,11 @@ void runFrame(App& app, State& state, Cameras& cameras, std::string& title) {
         state.keyboardMode && !capturing);
     handleShortcuts(app, state, cameras);
     updatePilot(state.pilot, state.controls);
+
+    // Red while master power is off, so the pilot can tell from the pad in
+    // their hands why the sticks do nothing.
+    setGamepadLight(
+        app, activePower(state.pilot).power == 0 ? kPowerOffLight : kGamepadBlue);
 
     drawMenuBar(app, state);
 
