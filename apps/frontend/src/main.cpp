@@ -38,7 +38,7 @@ namespace {
 // Must match the ID in CMakeLists.txt.
 constexpr const char* kAppId = "com.easternedgerobotics.frontend2027";
 constexpr const char* kFileName = "frontend";
-constexpr const char* kTitle = "Eastern Edge Frontend";
+constexpr const char* kTitle = "Eastern Edge 2027 Frontend";
 
 // When the proper input library exists, these should be replaced with that!
 constexpr SDL_Scancode kScreenshotKeys[kCameraCount] = {
