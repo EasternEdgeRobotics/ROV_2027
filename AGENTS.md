@@ -6,7 +6,7 @@ Eastern Edge Robotics's 2027 software. Right now that is the surface frontend, t
 | | |
 |---|---|
 | `apps/frontend` | The surface frontend: four cameras, captures, settings. Its own docs are in `apps/frontend/docs/` |
-| `apps/starstruck` | A photo booth on one ROV camera, with the ROV's lights as the flash and an Ivy 2 printer |
+| `apps/starstruck` | A photo booth on one ROV camera, with the ROV's lights as the flash and a Selphy CP1500 printer |
 | `libs/app` | `eer_app`. Window, GPU device, ImGui frame, theme, config paths, image loading, small UI helpers. Needs only SDL and ImGui |
 | `libs/video` | `eer_video`. WHEP streams, the camera widget, screenshots with EXIF. Needs GStreamer, libtiff and libcurl |
 | `cmake/` | `eer_package_app()` and the scripts it runs |

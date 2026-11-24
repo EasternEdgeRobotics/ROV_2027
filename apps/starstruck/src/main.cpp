@@ -46,7 +46,7 @@ constexpr SDL_Scancode kFullscreenKey = SDL_SCANCODE_F11;
 // booth goes back to live rather than wait on it.
 constexpr Uint64 kCaptureTimeoutMs = 2000;
 
-// The Ivy 2 holds 10 sheets at a time.
+// Enough for a group, without one group emptying the paper tray.
 constexpr int kMaxCopies = 10;
 
 // How long the white flash takes to fade once the photo is taken.

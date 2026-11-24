@@ -1,5 +1,5 @@
 # StarStruck: a photo booth on an ROV camera, with the ROV's lights as the
-# flash and a Canon Ivy 2 printer.
+# flash and a Canon Selphy CP1500 printer.
 
 add_executable(eer_starstruck
   src/main.cpp

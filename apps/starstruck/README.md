@@ -1,5 +1,5 @@
 # StarStruck
-A photo booth on an ROV camera. The ROV's lights are the flash, and photos print on a Canon Ivy 2.
+A photo booth on an ROV camera. The ROV's lights are the flash, and photos print on a Canon Selphy CP1500.
 
 ## Running
 Build as in the [top-level instructions](../../AGENTS.md#building), then:
@@ -35,16 +35,19 @@ Do not run it alongside the 2026 frontend, since both publish the pilot's input.
 For another vehicle, write a script that reads the same lines and point `lights_command` at it.
 
 ## Printing
-`scripts/print_watcher.py` prints each photo that appears in the print folder, then moves it to `printed/`. A photo that fails three times moves to `failed/`. It runs on Linux only, because the printer library needs BlueZ.
+`scripts/print_watcher.py` prints each photo that appears in the print folder through CUPS, then moves it to `printed/`. A photo CUPS refuses three times moves to `failed/`. It runs on macOS and Linux.
 
-1. Clone [dtgreene/ivy2](https://github.com/dtgreene/ivy2) and follow its README to install PyBluez and pair the printer.
-2. Run `sudo hciconfig 0 sspmode 0`. Do this after every reboot, or prints fail with "Invalid exchange".
-3. Start the watcher with the printer's Bluetooth address:
+1. Connect the Selphy to the same Wi-Fi network as the computer that will run the watcher. It supports AirPrint, so it needs no driver.
+2. Add it to CUPS. On macOS, use Printers & Scanners in System Settings. On Linux, find its `dnssd://` address with `lpinfo -v`, then:
    ```sh
-   PYTHONPATH=/path/to/ivy2 python3 scripts/print_watcher.py XX:XX:XX:XX:XX:XX
+   sudo lpadmin -p Selphy -E -v 'dnssd://...' -m everywhere
+   ```
+3. Install the requirements with `pip install -r scripts/requirements.txt`, then start the watcher with the printer's name from `lpstat -p`:
+   ```sh
+   python3 scripts/print_watcher.py Selphy
    ```
 
-If the watcher is on another machine, share the print folder and pass it with `--dir`. The printer refuses to print below 30% battery.
+If the watcher is on another machine, share the print folder and pass it with `--dir`. A photo the printer cannot finish, for lack of paper or ink, waits in the CUPS queue until it is fixed, and the photos after it wait too.
 
 ## Frame
 Each print is framed with `scripts/frame.png`. The photo fills the frame's fully transparent area, scaled to cover it and cropped to fit. To change the design, replace the file with a 1920x1280 PNG that has a transparent window where the photo goes. Pass `--frame` to use another file, or `--no-frame` to print without one.
@@ -73,5 +76,5 @@ Each print is framed with `scripts/frame.png`. The photo fills the frame's fully
 | `src/Config.cpp` | Loading and saving the config file |
 | `src/Lights.cpp` | Running the lights program |
 | `scripts/lights.py` | BlueStar's lights over rosbridge |
-| `scripts/print_watcher.py` | Framing and printing the print folder on an Ivy 2 |
+| `scripts/print_watcher.py` | Framing and printing the print folder through CUPS |
 | `scripts/frame.png` | The print frame |
