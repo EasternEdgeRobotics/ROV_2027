@@ -10,14 +10,14 @@ Build as in the [top-level instructions](../../AGENTS.md#building), then:
 Open Settings (F1) and enter the camera's WHEP URL.
 
 ## Using the booth
-Take photo counts down, blinking the lights each second, then turns the lights to full and takes the photo. The photo stays on screen until you choose Print or Retake.
+Take photo counts down, blinking the lights each second, then turns the lights to full and takes the photo. The photo stays on screen until you choose Back, Print or Retake. Retake starts a new countdown straight away.
 
 | Key | |
 |---|---|
 | Space | Take photo, or retake |
 | Up, Down | More or fewer copies, up to 10 |
 | Enter | Print |
-| Escape | Cancel the countdown, or retake |
+| Escape | Cancel the countdown, or go back |
 | F1 | Settings |
 | F11 | Full screen |
 

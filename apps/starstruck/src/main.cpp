@@ -108,6 +108,12 @@ void backToLive(State& state, Camera& camera) {
     setStage(state, Stage::Live);
 }
 
+// Straight into a new countdown, for when someone blinked.
+void retake(State& state, Camera& camera) {
+    backToLive(state, camera);
+    shoot(state, camera);
+}
+
 void changeCopies(State& state, int by) {
     state.copies = std::clamp(state.copies + by, 1, kMaxCopies);
 }
@@ -278,7 +284,7 @@ float drawBottomBar(State& state, Camera& camera) {
             ImGuiWindowFlags_NoBringToFrontOnFocus |
             ImGuiWindowFlags_NoScrollWithMouse);
 
-    enum class Press { Shoot, Cancel, Fewer, More, Print, Retake };
+    enum class Press { Shoot, Cancel, Back, Fewer, More, Print, Retake };
 
     struct BarButton {
         std::string label;
@@ -300,6 +306,7 @@ float drawBottomBar(State& state, Camera& camera) {
         // The ### keeps Print's ID the same while its label counts.
         case Stage::Review:
             buttons = {
+                {"Back", Press::Back},
                 {"-", Press::Fewer},
                 {"Print " + std::to_string(state.copies) +
                      (state.copies == 1 ? " copy" : " copies") + "###print",
@@ -342,8 +349,9 @@ float drawBottomBar(State& state, Camera& camera) {
             case Press::Fewer:  changeCopies(state, -1); break;
             case Press::More:   changeCopies(state, 1); break;
             case Press::Print:  print(state, camera); break;
+            case Press::Retake: retake(state, camera); break;
             case Press::Cancel:
-            case Press::Retake: backToLive(state, camera); break;
+            case Press::Back:   backToLive(state, camera); break;
         }
     }
 
@@ -547,7 +555,7 @@ void handleKeys(App& app, State& state, Camera& camera) {
         if (state.stage == Stage::Live) {
             shoot(state, camera);
         } else if (state.stage == Stage::Review) {
-            backToLive(state, camera);
+            retake(state, camera);
         }
     }
 
