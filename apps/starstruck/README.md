@@ -46,6 +46,9 @@ For another vehicle, write a script that reads the same lines and point `lights_
 
 If the watcher is on another machine, share the print folder and pass it with `--dir`. The printer refuses to print below 30% battery.
 
+## Frame
+Each print is framed with `scripts/frame.png`. The photo fills the frame's fully transparent area, scaled to cover it and cropped to fit. To change the design, replace the file with a 1920x1280 PNG that has a transparent window where the photo goes. Pass `--frame` to use another file, or `--no-frame` to print without one.
+
 ## Config
 `starstruck_config.json`, in the same directory as the frontend's config.
 
@@ -68,4 +71,5 @@ If the watcher is on another machine, share the print folder and pass it with `-
 | `src/Config.cpp` | Loading and saving the config file |
 | `src/Lights.cpp` | Running the lights program |
 | `scripts/lights.py` | BlueStar's lights over rosbridge |
-| `scripts/print_watcher.py` | Printing the print folder on an Ivy 2 |
+| `scripts/print_watcher.py` | Framing and printing the print folder on an Ivy 2 |
+| `scripts/frame.png` | The print frame |
