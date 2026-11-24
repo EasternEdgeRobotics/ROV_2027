@@ -1,11 +1,12 @@
 # Working in this repo
 
-Eastern Edge Robotics's 2027 software. Right now that is the surface frontend and the two libraries it is built from.
+Eastern Edge Robotics's 2027 software. Right now that is the surface frontend, the StarStruck photo booth and the two libraries they are built from.
 
 ## Layout
 | | |
 |---|---|
 | `apps/frontend` | The surface frontend: four cameras, captures, settings. Its own docs are in `apps/frontend/docs/` |
+| `apps/starstruck` | A photo booth on one ROV camera, with the ROV's lights as the flash and an Ivy 2 printer |
 | `libs/app` | `eer_app`. Window, GPU device, ImGui frame, theme, config paths, image loading, small UI helpers. Needs only SDL and ImGui |
 | `libs/video` | `eer_video`. WHEP streams, the camera widget, screenshots with EXIF. Needs GStreamer, libtiff and libcurl |
 | `cmake/` | `eer_package_app()` and the scripts it runs |
@@ -79,7 +80,7 @@ You may edit it. Follow the formatting already there: the "Last Update" line nam
 - Apps include library headers as `<eer/app/...>` and `<eer/video/...>`.
 - `third_party/` is never edited. Update by bumping the checkout.
 - Warnings (`-Wall -Wextra -Wpedantic`) apply to our targets only, and the build is kept free of them.
-- Platform `#if`s stay inside the libraries. `apps/frontend` has one, for `localtime`.
+- Platform `#if`s stay inside the libraries.
 - Keyboard input is read from SDL, through `App::keyPressed`, never through ImGui's key functions. ImGui is only asked whether a text field has focus. Two libraries each handling some of the keys is what the 2025 and 2026 frontends ended up with, and pilot controls will need SDL anyway.
 - Settings live in the config file and are edited in the Settings window. `Camera` reads them from plain public fields each frame, so there is one copy of each setting.
 

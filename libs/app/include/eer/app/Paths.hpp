@@ -26,4 +26,8 @@ const char* imguiIniPath(const std::string& appName);
 // The user's Pictures folder, or the best guess when the OS does not say.
 std::filesystem::path picturesDir();
 
+// <picturesDir>/<folder>/<local time>, for example
+// Pictures/eer_captures/2027-06-20_14-05-09. Not created here.
+std::filesystem::path sessionDir(const std::string& folder);
+
 }  // namespace paths

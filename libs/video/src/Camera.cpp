@@ -500,6 +500,7 @@ bool Camera::saveScreenshot() {
         ("captures_" + std::to_string(timestamp) + "_" + section +
          "_Camera_" + std::to_string(cameraNumber) + ".tiff");
 
+    lastScreenshot = request.file;
     request.width = frameWidth;
     request.height = frameHeight;
     request.flipVertical = flipVertical;
@@ -696,6 +697,13 @@ void Camera::prepare(SDL_GPUCommandBuffer* cmd) {
     }
 
     if (frame_.width <= 0 || frame_.height <= 0) {
+        return;
+    }
+
+    // Still polled while held, or the frames would pile up in the stream and
+    // the status would go stale.
+    if (hold && hasReceivedFrame) {
+        lastFrameTime = std::chrono::steady_clock::now();
         return;
     }
 

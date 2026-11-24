@@ -16,6 +16,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdlib>
+#include <ctime>
 #include <system_error>
 
 namespace fs = std::filesystem;
@@ -103,6 +104,21 @@ fs::path picturesDir() {
     // Normal on a minimal Linux install with no xdg-user-dirs.
     const std::string home = env("HOME");
     return home.empty() ? fs::path(".") : fs::path(home) / "Pictures";
+}
+
+fs::path sessionDir(const std::string& folder) {
+    const std::time_t now = std::time(nullptr);
+
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+
+    char text[32];
+    std::strftime(text, sizeof(text), "%Y-%m-%d_%H-%M-%S", &local);
+    return picturesDir() / folder / text;
 }
 
 }  // namespace paths

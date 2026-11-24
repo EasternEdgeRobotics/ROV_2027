@@ -62,10 +62,25 @@ public:
     const std::string& endpointVideoCaps() const { return desiredVideoCaps; }
     const std::string& endpointAudioCaps() const { return desiredAudioCaps; }
 
+    // Zero until the first frame arrives.
+    ImVec2 frameSize() const { return ImVec2(float(frameWidth), float(frameHeight)); }
+
     // Queues a screenshot of the next frame. False if the directory cannot be
     // created.
     bool screenshot();
     void waitForScreenshotWrites();
+
+    // True from screenshot() until the frame is read back. The picture on
+    // screen when it turns false is the one in the file.
+    bool screenshotPending() const { return takeScreenshot; }
+
+    // The file the last screenshot is being written to. It may still be
+    // writing, call waitForScreenshotWrites() before opening it.
+    const std::filesystem::path& lastScreenshotFile() const { return lastScreenshot; }
+
+    // While true the picture on screen stays as it is. The stream keeps
+    // running, so letting go shows live video again straight away.
+    bool hold = false;
 
     // Screenshot settings, read when a screenshot is taken.
     bool flipVertical = false;
@@ -122,6 +137,7 @@ private:
     std::string activeCodec;
 
     bool takeScreenshot = false;
+    std::filesystem::path lastScreenshot;
 
     int frameWidth = 0;
     int frameHeight = 0;

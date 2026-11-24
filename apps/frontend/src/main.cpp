@@ -25,7 +25,6 @@
 #endif
 
 #include <cstring>
-#include <ctime>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -102,21 +101,6 @@ bool pressed(const App& app, SDL_Scancode key) {
 // otherwise sway left would also capture camera 1.
 bool shortcut(const App& app, const State& state, SDL_Scancode key) {
     return pressed(app, key) && !(state.keyboardMode && keyboardModeUses(key));
-}
-
-std::string timestampForPath() {
-    const std::time_t now = std::time(nullptr);
-
-    std::tm local{};
-#if defined(_WIN32)
-    localtime_s(&local, &now);
-#else
-    localtime_r(&now, &local);
-#endif
-
-    char text[32];
-    std::strftime(text, sizeof(text), "%Y-%m-%d_%H-%M-%S", &local);
-    return text;
 }
 
 ImVec4 statusColour(Camera::Status status) {
@@ -920,7 +904,7 @@ int run(const std::string& profileName) {
     state.configStatus = loadConfig(state.configPath, state.config)
                              ? "Loaded"
                              : "Using defaults";
-    state.sessionDir = paths::picturesDir() / "eer_captures" / timestampForPath();
+    state.sessionDir = paths::sessionDir("eer_captures");
 
     // Every launch starts on None, so nobody flies on someone else's bindings
     // by accident. --profile is how a per-person launcher picks theirs.
