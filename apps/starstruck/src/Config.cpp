@@ -78,6 +78,8 @@ bool saveConfig(const fs::path& path, const Config& config) {
         {"idle_brightness", config.idleBrightness},
         {"blink_brightness", config.blinkBrightness},
         {"flash_brightness", config.flashBrightness},
+        {"breathe_brightness", config.breatheBrightness},
+        {"breathe_after_seconds", config.breatheAfterSeconds},
         {"flash_lead_ms", config.flashLeadMs},
         {"lights_command", config.lightsCommand},
         {"print_dir", config.printDir},
@@ -118,6 +120,8 @@ bool loadConfig(const fs::path& path, Config& config) {
     readInt(data, "idle_brightness", config.idleBrightness, 0, 255);
     readInt(data, "blink_brightness", config.blinkBrightness, 0, 255);
     readInt(data, "flash_brightness", config.flashBrightness, 0, 255);
+    readInt(data, "breathe_brightness", config.breatheBrightness, 0, 255);
+    readInt(data, "breathe_after_seconds", config.breatheAfterSeconds, 5, 600);
     readInt(data, "flash_lead_ms", config.flashLeadMs, 0, 5000);
     readStrings(data, "lights_command", config.lightsCommand);
     readText(data, "print_dir", config.printDir);

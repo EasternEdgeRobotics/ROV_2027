@@ -24,7 +24,7 @@ Take photo counts down, blinking the lights each second, then turns the lights t
 Every photo is saved as a TIFF in `Pictures/starstruck/<start time>/`. Print copies it into the print folder once per copy, `Pictures/starstruck/print` unless set otherwise.
 
 ## Lights
-StarStruck starts the program in `lights_command` and writes one brightness per line to its stdin, from 0 to 255. Closing stdin means StarStruck has quit. The levels for idle, the countdown blink and the flash are in Settings.
+StarStruck starts the program in `lights_command` and writes one brightness per line to its stdin, from 0 to 255. Closing stdin means StarStruck has quit. The levels for idle, the countdown blink and the flash are in Settings. After a quiet minute on the live view, the lights breathe slowly to catch the eye of people walking past.
 
 For BlueStar, use `scripts/lights.py`. It publishes to `/pilot_input` through the rosbridge server BlueStar's backend already runs. Install its requirements with `pip install -r scripts/requirements.txt`, then set the command in `starstruck_config.json`:
 ```json
@@ -60,6 +60,8 @@ Each print is framed with `scripts/frame.png`. The photo fills the frame's fully
 | `idle_brightness` | Lights outside the countdown, 0 to 255 |
 | `blink_brightness` | Lights for the first half of each countdown second |
 | `flash_brightness` | Lights while the photo is taken |
+| `breathe_brightness` | The peak the lights breathe up to while the booth is idle. At or below `idle_brightness` turns breathing off |
+| `breathe_after_seconds` | How long the live view sits untouched before the lights breathe |
 | `flash_lead_ms` | How long the lights are at full before the photo is taken. Raise it if photos come out dark |
 | `lights_command` | The lights program and its arguments. Empty for no lights |
 | `print_dir` | The print folder. Empty for `Pictures/starstruck/print` |

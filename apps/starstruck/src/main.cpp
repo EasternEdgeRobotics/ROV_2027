@@ -20,6 +20,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -50,6 +51,10 @@ constexpr int kMaxCopies = 10;
 
 // How long the white flash takes to fade once the photo is taken.
 constexpr Uint64 kScreenFlashMs = 400;
+
+// One breath of the idle lights, in and out.
+constexpr double kBreathMs = 4000.0;
+constexpr double kPi = 3.14159265358979323846;
 
 enum class Stage {
     Live,
@@ -194,7 +199,19 @@ int updateBooth(State& state, Camera& camera) {
 
             return config.flashBrightness;
 
+        // Starts from idle and eases in and out, so it never jumps.
         case Stage::Live:
+            if (const Uint64 after = Uint64(config.breatheAfterSeconds) * 1000;
+                elapsed >= after && config.breatheBrightness > config.idleBrightness) {
+                const double phase = double((elapsed - after) % Uint64(kBreathMs)) / kBreathMs;
+                const double amount = 0.5 - 0.5 * std::cos(phase * 2.0 * kPi);
+
+                return config.idleBrightness +
+                       int(amount * (config.breatheBrightness - config.idleBrightness) + 0.5);
+            }
+
+            break;
+
         case Stage::Review:
             break;
     }
@@ -502,6 +519,14 @@ void drawSettings(State& state, Camera& camera, Lights& lights) {
     ui::fieldLabel("Flash");
     ImGui::SetNextItemWidth(220.0f);
     ImGui::SliderInt("##flash", &config.flashBrightness, 0, 255);
+
+    ui::fieldLabel("Breathe");
+    ImGui::SetNextItemWidth(220.0f);
+    ImGui::SliderInt("##breathe", &config.breatheBrightness, 0, 255);
+
+    ui::fieldLabel("Breathe after");
+    ImGui::SetNextItemWidth(220.0f);
+    ImGui::SliderInt("##breathe_after", &config.breatheAfterSeconds, 5, 600, "%d s");
 
     ui::fieldLabel("Flash lead");
     ImGui::SetNextItemWidth(220.0f);

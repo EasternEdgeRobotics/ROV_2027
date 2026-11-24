@@ -23,6 +23,12 @@ struct Config {
     int blinkBrightness = 64;
     int flashBrightness = 255;
 
+    // After this long untouched on the live view, the lights breathe between
+    // idle and this level, so people walking past notice the booth. A peak at
+    // or below idle turns it off.
+    int breatheBrightness = 40;
+    int breatheAfterSeconds = 60;
+
     // How long the lights are at full before the frame is taken. Covers the
     // trip to the ROV and the camera's own latency, otherwise the photo shows
     // the lights still off.
