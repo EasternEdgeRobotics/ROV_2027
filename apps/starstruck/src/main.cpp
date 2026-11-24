@@ -48,6 +48,9 @@ constexpr Uint64 kCaptureTimeoutMs = 2000;
 // The Ivy 2 holds 10 sheets at a time.
 constexpr int kMaxCopies = 10;
 
+// How long the white flash takes to fade once the photo is taken.
+constexpr Uint64 kScreenFlashMs = 400;
+
 enum class Stage {
     Live,
     Countdown,
@@ -577,6 +580,24 @@ void handleKeys(App& app, State& state, Camera& camera) {
     }
 }
 
+// White over everything, fading out from the moment the photo was taken. It
+// starts after the capture, so it never lights the photo itself.
+void drawScreenFlash(const State& state) {
+    const Uint64 elapsed = SDL_GetTicks() - state.stageStart;
+
+    if (state.stage != Stage::Review || elapsed >= kScreenFlashMs) {
+        return;
+    }
+
+    const float alpha = 1.0f - float(elapsed) / float(kScreenFlashMs);
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    ImGui::GetForegroundDrawList()->AddRectFilled(
+        viewport->Pos,
+        ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
+        ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, alpha)));
+}
+
 void runFrame(App& app, State& state, Camera& camera, Lights& lights) {
     camera.flipVertical = state.config.flipVertical;
     camera.flipHorizontal = state.config.flipHorizontal;
@@ -593,6 +614,8 @@ void runFrame(App& app, State& state, Camera& camera, Lights& lights) {
     if (state.showSettings) {
         drawSettings(state, camera, lights);
     }
+
+    drawScreenFlash(state);
 }
 
 int run() {
