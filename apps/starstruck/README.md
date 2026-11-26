@@ -28,8 +28,9 @@ StarStruck starts the program in `lights_command` and writes one brightness per 
 
 For BlueStar, use `scripts/lights.py`. It publishes to `/pilot_input` through the rosbridge server BlueStar's backend already runs. Install its requirements with `pip install -r scripts/requirements.txt`, then set the command in `starstruck_config.json`:
 ```json
-"lights_command": ["python3", "/path/to/apps/starstruck/scripts/lights.py", "--host", "192.168.137.200"]
+"lights_command": ["python3", "/path/to/apps/starstruck/scripts/lights.py", "--host", "192.168.137.211"]
 ```
+The host is BlueStar's ROS container, not the Pi itself at `192.168.137.200`.
 Do not run it alongside the 2026 frontend, since both publish the pilot's input. It sends power 0, so the thrusters stay off.
 
 For another vehicle, write a script that reads the same lines and point `lights_command` at it.
