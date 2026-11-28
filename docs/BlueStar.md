@@ -1,5 +1,5 @@
 # BlueStar
-BlueStar is Eastern Edge's 2026 ROV for the MATE ROV Competition, where it placed 1st in the Explorer class. BlueStar is used as a development platform before the 2027 ROV is ready.
+BlueStar is Eastern Edge's 2026 ROV for the MATE ROV Competition, where it placed 1st in the Explorer class. BlueStar is used as a development platform before Blue Mist, the 2027 ROV, is ready.
 
 ## Hardware
 BlueStar uses a Raspberry Pi 5 SBC running Raspberry Pi OS 13 Trixie connected to a Raspberry Pi Pico using the Eastern Edge LapisHAT. LapisHAT is a custom PCB built around a Pi Pico microcontroller that sits on top of the Raspberry Pi 5 and centralizes control of all 6 thrusters, the LED, and the DC motor, simplifying cabling within the enclosure. LapisHAT supports 6 thrusters, 4 servos, 2 DC motors and 2 LEDs.
